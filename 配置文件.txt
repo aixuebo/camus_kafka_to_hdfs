@@ -1,0 +1,124 @@
+# Needed Camus properties, more cleanup to come
+# final top-level data output directory, sub-directory will be dynamically      created for each topic pulled
+etl.destination.path=/user/root/topics
+# HDFS location where you want to keep execution files, i.e. offsets, error logs, and count files
+etl.execution.base.path=/user/root/exec
+# where completed Camus job output directories are kept, usually a sub-dir in the base.path
+etl.execution.history.path=/user/root/camus/exec/history
+# Kafka-0.8 handles all zookeeper calls
+#zookeeper.hosts=
+#zookeeper.broker.topics=/brokers/topics
+#zookeeper.broker.nodes=/brokers/ids
+# Concrete implementation of the Encoder class to use (used by Kafka Audit, and thus optional for now)    `camus.message.encoder.class=com.linkedin.camus.etl.kafka.coders.DummyKafkaMessageEncoder`
+# Concrete implementation of the Decoder class to use
+  #camus.message.decoder.class=com.linkedin.camus.etl.kafka.coders.LatestSchemaKafkaAvroMessageDecoder
+# Used by avro-based Decoders to use as their Schema Registry
+ #kafka.message.coder.schema.registry.class=com.linkedin.camus.example.schemaregistry.DummySchemaRegistry
+# Used by the committer to arrange .avro files into a partitioned scheme. This will be the default partitioner for all
+# topic that do not have a partitioner specified
+    #etl.partitioner.class=com.linkedin.camus.etl.kafka.coders.DefaultPartitioner
+# Partitioners can also be set on a per-topic basis
+#etl.partitioner.class.<topic-name>=com.your.custom.CustomPartitioner
+# all files in this dir will be added to the distributed cache and placed on the classpath for hadoop tasks
+# hdfs.default.classpath.dir=
+# max hadoop tasks to use, each task can pull multiple topic partitions
+mapred.map.tasks=30
+# max historical time that will be pulled from each partition based on event timestamp
+kafka.max.pull.hrs=1
+# events with a timestamp older than this will be discarded.
+kafka.max.historical.days=3
+# Max minutes for each mapper to pull messages (-1 means no limit)
+kafka.max.pull.minutes.per.task=-1
+# if whitelist has values, only whitelisted topic are pulled.  nothing on the blacklist is pulled
+#kafka.blacklist.topics=
+kafka.whitelist.topics=lognew
+log4j.configuration=true
+# Name of the client as seen by kafka
+kafka.client.name=camus
+# Fetch Request Parameters
+#kafka.fetch.buffer.size=
+#kafka.fetch.request.correlationid=
+#kafka.fetch.request.max.wait=
+#kafka.fetch.request.min.bytes=
+# Connection parameters.
+kafka.brokers=10.25.3.207:6667
+#kafka.timeout.value=
+#Stops the mapper from getting inundated with Decoder exceptions for the same topic
+#Default value is set to 10
+max.decoder.exceptions.to.print=5
+#Controls the submitting of counts to Kafka
+#Default value set to true
+post.tracking.counts.to.kafka=true
+monitoring.event.class=class.that.generates.record.to.submit.counts.to.kafka
+# everything below this point can be ignored for the time being, will provide   more documentation down the road
+##########################
+etl.run.tracking.post=false
+#kafka.monitor.tier=
+#etl.counts.path=
+kafka.monitor.time.granularity=10
+etl.hourly=hourly
+etl.daily=daily
+etl.ignore.schema.errors=false
+# configure output compression for deflate or snappy. Defaults to deflate
+etl.output.codec=deflate
+etl.deflate.level=6
+#etl.output.codec=snappy
+etl.default.timezone=America/Los_Angeles
+etl.output.file.time.partition.mins=60
+etl.keep.count.files=false
+etl.execution.history.max.of.quota=.8
+mapred.output.compress=true
+mapred.map.max.attempts=1
+kafka.client.buffer.size=20971520
+kafka.client.so.timeout=60000
+#zookeeper.session.timeout=
+#zookeeper.connection.timeout=
+
+
+
+# Kafka brokers
+kafka.brokers=10.10.99.132:9092,10.10.99.133:9092,10.10.99.134:9092,10.10.99.135:9092
+# job名称
+camus.job.name=binlog-fetch
+# Kafka数据落地到HDFS的位置。Camus会按照topic名自动创建子目录
+etl.destination.path=/user/hive/warehouse/binlog.db
+# HDFS上用来保存当前Camus job执行信息的位置，如offset、错误日志等
+etl.execution.base.path=/camus/exec
+# HDFS上保存Camus job执行历史的位置
+etl.execution.history.path=/camus/exec/history
+# 即core-site.xml中的fs.defaultFS参数
+fs.default.name=hdfs://mycluster
+# Kafka消息解码器，默认有JsonStringMessageDecoder和KafkaAvroMessageDecoder
+# Canal的Binlog是JSON格式的。当然我们也可以自定义解码器
+camus.message.decoder.class=com.linkedin.camus.etl.kafka.coders.JsonStringMessageDecoder
+# 落地到HDFS时的写入器，默认支持Avro、SequenceFile和字符串
+# 这里我们采用一个自定义的WriterProvider，代码在后面
+# etl.record.writer.provider.class=com.linkedin.camus.etl.kafka.common.StringRecordWriterProvider
+etl.record.writer.provider.class=com.linkedin.camus.etl.kafka.common.CanalBinlogRecordWriterProvider
+# JSON消息中的时间戳字段，用来做分区的
+# 注意这里采用Binlog的业务时间，而不是日志时间
+camus.message.timestamp.field=es
+# 时间戳字段的格式
+camus.message.timestamp.format=unix_milliseconds
+# 时间分区的类型和格式，默认支持小时、天，也可以自定义时间
+etl.partitioner.class=com.linkedin.camus.etl.kafka.partitioner.TimeBasedPartitioner
+etl.destination.path.topic.sub.dirformat='pt_hour'=YYYYMMddHH
+# 拉取过程中MR job的mapper数
+mapred.map.tasks=20
+# 按照时间戳字段，一次性拉取多少个小时的数据过后就停止，-1为不限制
+kafka.max.pull.hrs=-1
+# 时间戳早于多少天的数据会被抛弃而不入库
+kafka.max.historical.days=3
+# 每个mapper的最长执行分钟数，-1为不限制
+kafka.max.pull.minutes.per.task=-1
+# Kafka topic白名单和黑名单
+kafka.blacklist.topics=__consumer_offsets,binlog_dym_test,binlog_mall_test,test010802,test_kylin_streaming2,user_persona4scheduler,HbaseRequestsPerSecond
+kafka.whitelist.topics=
+# 设定输出数据的压缩方式，支持deflate、gzip和snappy
+mapred.output.compress=false
+# etl.output.codec=gzip
+# etl.deflate.level=6
+# 设定时区，以及一个时间分区的单位
+etl.default.timezone=Asia/Shanghai
+etl.output.file.time.partition.mins=60
+

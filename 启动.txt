@@ -1,0 +1,4 @@
+hadoop jar camus-example-0.1.0-SNAPSHOT-shaded.jar com.linkedin.camus.etl.kafka.CamusJob -P camus.properties
+
+-P 配置文件的路径
+

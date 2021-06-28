@@ -34,7 +34,7 @@ public class EtlKey implements WritableComparable<EtlKey>, IEtlKey {
   private String leaderId = "";
 
   private long beginOffset = 0;
-  private long offset = 0;
+  private long offset = 0;////从哪个位置开始读
   private long checksum = 0;
 
   private long time = 0;//接受数据时的时间戳
