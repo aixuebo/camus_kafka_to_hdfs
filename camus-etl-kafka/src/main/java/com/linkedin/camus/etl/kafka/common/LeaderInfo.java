@@ -6,13 +6,14 @@ import java.net.URI;
 /**
  * Model class to store the leaderInformation
  * @author ggupta
+ * 表示 topic-partition的一个leader信息
  *
  */
 
 public class LeaderInfo {
 
-  private URI uri;
-  private int leaderId;
+  private URI uri;//new URI("tcp://leader节点")
+  private int leaderId;//leaderId
 
   public LeaderInfo(URI uri, int leaderId) {
     this.uri = uri;

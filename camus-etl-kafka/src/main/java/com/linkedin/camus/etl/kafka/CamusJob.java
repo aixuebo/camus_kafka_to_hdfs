@@ -104,9 +104,9 @@ public class CamusJob extends Configured implements Tool {
   public static final String KAFKA_FETCH_REQUEST_MAX_WAIT = "kafka.fetch.request.max.wait";
   public static final String KAFKA_FETCH_REQUEST_MIN_BYTES = "kafka.fetch.request.min.bytes";
   public static final String KAFKA_FETCH_REQUEST_CORRELATION_ID = "kafka.fetch.request.correlationid";
-  public static final String KAFKA_CLIENT_NAME = "kafka.client.name";
-  public static final String KAFKA_FETCH_BUFFER_SIZE = "kafka.fetch.buffer.size";
-  public static final String KAFKA_BROKERS = "kafka.brokers";
+  public static final String KAFKA_CLIENT_NAME = "kafka.client.name";//表示kafka客户端的名字，让服务端知道是谁在请求
+  public static final String KAFKA_FETCH_BUFFER_SIZE = "kafka.fetch.buffer.size";//每次去kafka抓取多少条数据回来
+  public static final String KAFKA_BROKERS = "kafka.brokers";//kafka的brokers集合
   public static final String KAFKA_HOST_URL = "kafka.host.url";
   public static final String KAFKA_HOST_PORT = "kafka.host.port";
   public static final String KAFKA_TIMEOUT_VALUE = "kafka.timeout.value";
@@ -179,6 +179,7 @@ public class CamusJob extends Configured implements Tool {
 
     FileSystem fs = FileSystem.get(conf);
 
+    //hadoopCacheJarDir目录下所有文件和jar包都添加到classpath下，注意:要符合命名规则
     String hadoopCacheJarDir = conf.get("hdfs.default.classpath.dir", null);
 
     List<Pattern> jarFilterString = new ArrayList<Pattern>();
@@ -646,13 +647,19 @@ public class CamusJob extends Configured implements Tool {
     ToolRunner.run(job, args);
   }
 
+  /**
+   * 获取Properties信息
+   * @param args
+   * @return
+   * @throws Exception
+   */
   @SuppressWarnings("static-access")
   @Override
   public int run(String[] args) throws Exception {
     Options options = new Options();
 
-    options.addOption("p", true, "properties filename from the classpath");
-    options.addOption("P", true, "external properties filename (hdfs: or local FS)");
+    options.addOption("p", true, "properties filename from the classpath");//在classpath下
+    options.addOption("P", true, "external properties filename (hdfs: or local FS)");//在HDFS或者本地local目录下的文件
 
     options.addOption(OptionBuilder.withArgName("property=value").hasArgs(2).withValueSeparator()
         .withDescription("use value for given property").create("D"));

@@ -14,11 +14,20 @@ import java.util.concurrent.atomic.AtomicLong;
  * 
  * @param <S>
  *            The type of the schema that this registry manages.
+ *
+ * 使用内存维护每一个topic的schema版本信息。
+ * 使用MemorySchemaRegistryTuple对象表示topic+schema版本号id。
+ *
+ *
+ * S表示topic的schema对象
  */
 public class MemorySchemaRegistry<S> implements SchemaRegistry<S> {
-  private final Map<MemorySchemaRegistryTuple, S> schemasById;
-  private final Map<String, MemorySchemaRegistryTuple> latest;
-  private final AtomicLong ids;
+  //该对象可以还原任意一个id版本的schema
+  private final Map<MemorySchemaRegistryTuple, S> schemasById;//存储所有的topic各个版本的schema信息，因此key是topic+id,value是在该版本的schema信息
+
+  //该对象可以还原最新版本的schema
+  private final Map<String, MemorySchemaRegistryTuple> latest;//存储topic的最新的schema信息。key是topic，value是最新版的id+schema信息
+  private final AtomicLong ids;//每一次topic+schema变更都会累加ids序号,使其全局唯一
 
   public void init(Properties props) {
   }

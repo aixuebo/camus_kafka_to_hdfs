@@ -27,7 +27,6 @@ public abstract class AbstractMonitoringEvent {
    * @param topic
    * @param granularity
    * @param tier
-   * @param conf
    * @return GenericRecord
    */
   public abstract GenericRecord createMonitoringEventRecord(Source countEntry, String topic, long granularity,

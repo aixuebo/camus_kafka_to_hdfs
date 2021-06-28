@@ -1,8 +1,10 @@
 package com.linkedin.camus.schemaregistry;
 
+//获取topic的最新的schema信息
+//因此包含topic、schema对象、md5(byte{schema})
 public class SchemaDetails<S> {
 	private String topic;
-	private String id;
+	private String id;//md5(byte{schema}) ,用于根据topic+id,可以查找到对应的schema信息
 	private S schema;
 
 	public SchemaDetails(String topic, String id, S schema) {

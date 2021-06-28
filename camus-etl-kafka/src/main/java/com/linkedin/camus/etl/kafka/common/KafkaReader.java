@@ -32,26 +32,31 @@ import com.linkedin.camus.etl.kafka.mapred.EtlInputFormat;
  * KafkaRecordReader.
  *
  * @author Richard Park
+ * 连接topic+partition的leader节点,创造kafka的消费者，去获取某一个topic+partition的数据信息，
+ * 已知要抓取的offset范围是[beginOffset,lastOffset],currentOffset用于跟踪已经抓取到的offset位置
+ *
+ * 目标，读取一个topic+partition数据，返回EtlKey和KafkaMessage
  */
 public class KafkaReader {
   // index of context
   private static Logger log = Logger.getLogger(KafkaReader.class);
-  private EtlRequest kafkaRequest = null;
-  private SimpleConsumer simpleConsumer = null;
+  private EtlRequest kafkaRequest = null;//代表一个mapper要去抓取某一个topic+partition上的数据信息
+  private SimpleConsumer simpleConsumer = null;//kafka消费者
 
-  private long beginOffset;
-  private long currentOffset;
-  private long lastOffset;
-  private long currentCount;
+  private long beginOffset;//开始从哪个offset开始抓取
+  private long currentOffset;//下一个要抓取的offset
+  private long lastOffset;//抓取到哪里结束
+  private long currentCount;//当前抓取了多少条数据
 
   private TaskAttemptContext context;
 
-  private Iterator<MessageAndOffset> messageIter = null;
+  private Iterator<MessageAndOffset> messageIter = null;//记录每一个offset和对应的message信息,message中包含了key和value
 
-  private long totalFetchTime = 0;
-  private long lastFetchTime = 0;
+  private long totalFetchTime = 0;//抓取请求到收到数据的总耗时
+  private long lastFetchTime = 0;//上一次抓取请求到收到数据的耗时
 
-  private int fetchBufferSize;
+  private int fetchBufferSize;//每次抓取多少条数据回来
+
 
   /**
    * Construct using the json representation of the kafka request
@@ -76,7 +81,7 @@ public class KafkaReader {
 
     // read data from queue
 
-    URI uri = kafkaRequest.getURI();
+    URI uri = kafkaRequest.getURI();//topic+partition的leader节点
     simpleConsumer = inputFormat.createSimpleConsumer(context, uri.getHost(), uri.getPort());
     log.info("Connected to leader " + uri + " beginning reading at offset " + beginOffset + " latest offset="
         + lastOffset);
@@ -146,20 +151,21 @@ public class KafkaReader {
    *
    * @return false if there's no more fetches
    * @throws IOException
+   * 请求kafka,抓取topic+partition的数据
    */
-
   public boolean fetch() throws IOException {
     if (currentOffset >= lastOffset) {
       return false;
     }
     long tempTime = System.currentTimeMillis();
-    TopicAndPartition topicAndPartition = new TopicAndPartition(kafkaRequest.getTopic(), kafkaRequest.getPartition());
+    TopicAndPartition topicAndPartition = new TopicAndPartition(kafkaRequest.getTopic(), kafkaRequest.getPartition());//抓取哪个topic+partition
     log.debug("\nAsking for offset : " + (currentOffset));
-    PartitionFetchInfo partitionFetchInfo = new PartitionFetchInfo(currentOffset, fetchBufferSize);
+    PartitionFetchInfo partitionFetchInfo = new PartitionFetchInfo(currentOffset, fetchBufferSize);//从哪个offset开始抓取，期待抓取多少个回来
 
     HashMap<TopicAndPartition, PartitionFetchInfo> fetchInfo = new HashMap<TopicAndPartition, PartitionFetchInfo>();
     fetchInfo.put(topicAndPartition, partitionFetchInfo);
 
+    //发送抓取请求，抓取topic+partition数据，从offset开始抓取，抓取多少条
     FetchRequest fetchRequest =
         new FetchRequest(CamusJob.getKafkaFetchRequestCorrelationId(context), CamusJob.getKafkaClientName(context),
             CamusJob.getKafkaFetchRequestMaxWait(context), CamusJob.getKafkaFetchRequestMinBytes(context), fetchInfo);
@@ -173,7 +179,7 @@ public class KafkaReader {
                 + "\n";
         throw new RuntimeException(message);
       }
-      return processFetchResponse(fetchResponse, tempTime);
+      return processFetchResponse(fetchResponse, tempTime);//抓取的请求前时间戳
     } catch (Exception e) {
       log.info("Exception generated during fetch for topic " + kafkaRequest.getTopic() + ": " + e.getMessage()
           + ". Will refresh topic metadata and retry.");
@@ -181,6 +187,7 @@ public class KafkaReader {
     }
   }
 
+  //刷新元数据，并且抓取kafka的消息
   private boolean refreshTopicMetadataAndRetryFetch(FetchRequest fetchRequest, long tempTime) {
     try {
       refreshTopicMetadata();
@@ -199,6 +206,7 @@ public class KafkaReader {
     }
   }
 
+  //刷新元数据 ,请求topic+partition最新的leader节点
   private void refreshTopicMetadata() {
     TopicMetadataRequest request = new TopicMetadataRequest(Collections.singletonList(kafkaRequest.getTopic()));
     TopicMetadataResponse response;
@@ -221,10 +229,10 @@ public class KafkaReader {
     }
   }
 
+  //抓取的数据结果，以及抓取前的时间戳，用于计算抓取的耗时
   private boolean processFetchResponse(FetchResponse fetchResponse, long tempTime) {
     try {
-      ByteBufferMessageSet messageBuffer =
-          fetchResponse.messageSet(kafkaRequest.getTopic(), kafkaRequest.getPartition());
+      ByteBufferMessageSet messageBuffer = fetchResponse.messageSet(kafkaRequest.getTopic(), kafkaRequest.getPartition());
       lastFetchTime = (System.currentTimeMillis() - tempTime);
       log.debug("Time taken to fetch : " + (lastFetchTime / 1000) + " seconds");
       log.debug("The size of the ByteBufferMessageSet returned is : " + messageBuffer.sizeInBytes());
@@ -236,7 +244,7 @@ public class KafkaReader {
       MessageAndOffset message = null;
       while (messageIter2.hasNext()) {
         message = messageIter2.next();
-        if (message.offset() < currentOffset) {
+        if (message.offset() < currentOffset) {//跳过无效的offset
           //flag = true;
           skipped++;
         } else {
@@ -280,6 +288,7 @@ public class KafkaReader {
    * taking the diffs of the offsets
    *
    * @return
+   * 总共需要读取多少条数据
    */
   public long getTotalBytes() {
     return (lastOffset > beginOffset) ? lastOffset - beginOffset : 0;
@@ -289,6 +298,7 @@ public class KafkaReader {
    * Returns the total bytes that have been fetched so far
    *
    * @return
+   * 已经读取多少条数据
    */
   public long getReadBytes() {
     return currentOffset - beginOffset;

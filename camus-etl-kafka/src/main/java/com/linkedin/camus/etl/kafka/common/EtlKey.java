@@ -18,23 +18,30 @@ import com.linkedin.camus.etl.IEtlKey;
 /**
  * The key for the mapreduce job to pull kafka. Contains offsets and the
  * checksum.
+ *
+ * 保存接受到的一个信息内容:topic、partition、leaderId、offset、checksum 、额外附加信息,比如message的大小
+ *
+ * 做为hadoop的key
  */
 public class EtlKey implements WritableComparable<EtlKey>, IEtlKey {
   public static final Text SERVER = new Text("server");
   public static final Text SERVICE = new Text("service");
   public static EtlKey DUMMY_KEY = new EtlKey();
 
-  private String leaderId = "";
+
+  private String topic = "";
   private int partition = 0;
+  private String leaderId = "";
+
   private long beginOffset = 0;
   private long offset = 0;
   private long checksum = 0;
-  private String topic = "";
-  private long time = 0;
+
+  private long time = 0;//接受数据时的时间戳
   private String server = "";
   private String service = "";
   private long totalMessageSize = 0;
-  private MapWritable partitionMap = new MapWritable();
+  private MapWritable partitionMap = new MapWritable();//存储额外属性信息
 
   /**
    * dummy empty constructor
@@ -145,6 +152,7 @@ public class EtlKey implements WritableComparable<EtlKey>, IEtlKey {
     return this.checksum;
   }
 
+  //信息大小
   @Override
   public long getMessageSize() {
     Text key = new Text("message.size");
@@ -165,11 +173,13 @@ public class EtlKey implements WritableComparable<EtlKey>, IEtlKey {
     this.totalMessageSize = totalMessageSize;
   }
 
+  //设置信息大小
   public void setMessageSize(long messageSize) {
     Text key = new Text("message.size");
     put(key, new LongWritable(messageSize));
   }
 
+  //存放额外属性
   public void put(Writable key, Writable value) {
     this.partitionMap.put(key, value);
   }

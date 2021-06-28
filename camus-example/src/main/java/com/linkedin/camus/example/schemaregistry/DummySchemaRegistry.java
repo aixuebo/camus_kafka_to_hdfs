@@ -12,6 +12,8 @@ import com.linkedin.camus.schemaregistry.MemorySchemaRegistry;
  * This is a little dummy registry that just uses a memory-backed schema
  * registry to store two dummy Avro schemas. You can use this with
  * camus.properties
+ *
+ * 为两个topic分别注册两种schema
  */
 public class DummySchemaRegistry extends MemorySchemaRegistry<Schema> {
   public DummySchemaRegistry(Configuration conf) {

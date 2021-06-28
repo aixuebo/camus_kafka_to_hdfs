@@ -32,7 +32,7 @@ import com.linkedin.camus.etl.kafka.partitioner.DefaultPartitioner;
 
 public class EtlMultiOutputFormat extends FileOutputFormat<EtlKey, Object> {
   public static final String ETL_DESTINATION_PATH = "etl.destination.path";
-  public static final String ETL_DESTINATION_PATH_TOPIC_SUBDIRECTORY = "etl.destination.path.topic.sub.dir";
+  public static final String ETL_DESTINATION_PATH_TOPIC_SUBDIRECTORY = "etl.destination.path.topic.sub.dir";//topic下的子目录名字
   public static final String ETL_DESTINATION_PATH_TOPIC_SUBDIRFORMAT = "etl.destination.path.topic.sub.dirformat";
   public static final String ETL_DESTINATION_PATH_TOPIC_SUBDIRFORMAT_LOCALE = "etl.destination.path.topic.sub.dirformat.locale";
   public static final String ETL_RUN_MOVE_DATA = "etl.run.move.data";
@@ -45,8 +45,10 @@ public class EtlMultiOutputFormat extends FileOutputFormat<EtlKey, Object> {
 
   public static final String KAFKA_MONITOR_TIME_GRANULARITY_MS = "kafka.monitor.time.granularity";
   public static final String ETL_DEFAULT_PARTITIONER_CLASS = "etl.partitioner.class";
-  public static final String ETL_OUTPUT_CODEC = "etl.output.codec";
+
+  public static final String ETL_OUTPUT_CODEC = "etl.output.codec";//输出文件的压缩方式
   public static final String ETL_DEFAULT_OUTPUT_CODEC = "deflate";
+
   public static final String ETL_RECORD_WRITER_PROVIDER_CLASS = "etl.record.writer.provider.class";
 
   public static final DateTimeFormatter FILE_DATE_FORMATTER = DateUtils.getDateTimeFormatter("YYYYMMddHH");

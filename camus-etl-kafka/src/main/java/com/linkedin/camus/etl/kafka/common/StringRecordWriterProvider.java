@@ -28,15 +28,18 @@ import org.apache.log4j.Logger;
 /**
  * Provides a RecordWriter that uses FSDataOutputStream to write
  * a String record as bytes to HDFS without any reformatting or compression.
+ *  将value是String类型的数据输出到hdfs上。
+ *  比如json信息
  */
 public class StringRecordWriterProvider implements RecordWriterProvider {
+
+
   public static final String ETL_OUTPUT_RECORD_DELIMITER = "etl.output.record.delimiter";
   public static final String DEFAULT_RECORD_DELIMITER = "\n";
+  protected String recordDelimiter = null;//每行分隔符
 
-  protected String recordDelimiter = null;
-
-  private String extension = "";
-  private boolean isCompressed = false;
+  private String extension = "";//压缩方式的后缀名
+  private boolean isCompressed = false;//是否压缩
   private CompressionCodec codec = null;
 
   public StringRecordWriterProvider(TaskAttemptContext context) {
@@ -75,13 +78,13 @@ public class StringRecordWriterProvider implements RecordWriterProvider {
       CamusWrapper camusWrapper, FileOutputCommitter committer) throws IOException, InterruptedException {
 
     // If recordDelimiter hasn't been initialized, do so now
+    // 每行分隔符
     if (recordDelimiter == null) {
       recordDelimiter = context.getConfiguration().get(ETL_OUTPUT_RECORD_DELIMITER, DEFAULT_RECORD_DELIMITER);
     }
 
     // Get the filename for this RecordWriter.
-    Path path =
-        new Path(committer.getWorkPath(), EtlMultiOutputFormat.getUniqueFile(context, fileName, getFilenameExtension()));
+    Path path = new Path(committer.getWorkPath(), EtlMultiOutputFormat.getUniqueFile(context, fileName, getFilenameExtension()));
 
     FileSystem fs = path.getFileSystem(context.getConfiguration());
     if (!isCompressed) {
@@ -113,6 +116,7 @@ public class StringRecordWriterProvider implements RecordWriterProvider {
     */
   }
 
+  //向输出流中，写入key和value信息
   protected static class ByteRecordWriter extends RecordWriter<IEtlKey, CamusWrapper> {
     private DataOutputStream out;
     private String recordDelimiter;
@@ -122,6 +126,7 @@ public class StringRecordWriterProvider implements RecordWriterProvider {
       this.recordDelimiter = recordDelimiter;
     }
 
+    //该类处理的value信息一定是String类型的，比如json
     @Override
     public void write(IEtlKey ignore, CamusWrapper value) throws IOException {
       boolean nullValue = value == null;

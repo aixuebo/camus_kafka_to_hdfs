@@ -23,6 +23,7 @@ public abstract class Partitioner extends Configured {
      * @param context The JobContext.
      * @param etlKey The EtlKey containing values extracted from the Record by the MessageDecoder.
      * @return A string that encodes the partitioning values.
+     * 根据事件发生的时间戳，经过转换成分区对应的时间戳long值
      */
     public abstract String encodePartition(JobContext context, IEtlKey etlKey);
 
@@ -39,6 +40,7 @@ public abstract class Partitioner extends Configured {
      * @param encodedPartition The encoded partition values. This will be the return of the the encodePartition() method
      *                         above.
      * @return A path string where the avro files will be moved to.
+     * 根据上一步转换的分区时间戳，转换成分区需要的路径，用于存储数据
      */
     public abstract String generatePartitionedPath(JobContext context, String topic, String encodedPartition);
     
@@ -54,6 +56,8 @@ public abstract class Partitioner extends Configured {
      * @param encodedPartition The encoded partition values. This will be the return of the the encodePartition() method
      *                         above.
      * @return A path string where the avro files will be moved to.
+     * 比如以小时为分区存储数据，但来源于不同的partition数据，同一个partition还可能因为leader变更也会有变化，因此每一个来源产生一个文件。
+     * 文件名由topic+partitionId+brokerId等信息组合而成
      */
     public abstract String generateFileName(JobContext context, String topic, String brokerId, int partitionId, 
         int count, long offset, String encodedPartition);

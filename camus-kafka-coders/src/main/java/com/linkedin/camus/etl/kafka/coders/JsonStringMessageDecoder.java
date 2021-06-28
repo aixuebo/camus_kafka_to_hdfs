@@ -32,6 +32,9 @@ import java.util.Properties;
  * <p/>
  * This MessageDecoder returns a CamusWrapper that works with Strings payloads,
  * since JSON data is always a String.
+ *
+ 将kafka中Message信息中value具体的内容,转换成json字符串。
+ kafka中value本身就是json类型的数据
  */
 public class JsonStringMessageDecoder extends MessageDecoder<Message, String> {
   private static final org.apache.log4j.Logger log = Logger.getLogger(JsonStringMessageDecoder.class);
@@ -65,6 +68,7 @@ public class JsonStringMessageDecoder extends MessageDecoder<Message, String> {
     String payloadString;
     JsonObject jsonObject;
 
+    //解析value对应的json信息
     try {
       payloadString = new String(message.getPayload(), "UTF-8");
     } catch (UnsupportedEncodingException e) {
@@ -81,6 +85,7 @@ public class JsonStringMessageDecoder extends MessageDecoder<Message, String> {
     }
 
     // Attempt to read and parse the timestamp element into a long.
+    //从value中提取时间戳
     if (jsonObject.has(timestampField)) {
       // If timestampFormat is 'unix_seconds',
       // then the timestamp only needs converted to milliseconds.

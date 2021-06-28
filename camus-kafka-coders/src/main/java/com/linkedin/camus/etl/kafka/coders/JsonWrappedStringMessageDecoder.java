@@ -33,10 +33,23 @@ import java.util.Properties;
  * <p/>
  * This MessageDecoder returns a CamusWrapper that works with Strings payloads,
  * since JSON data is always a String.
+ *
+ *
+ 将kafka中Message信息转换成json字符串:
+ {
+ "topic":"",
+ "partition":"",
+ "offset":"",
+ "checksum":"",
+ "key":"{key本身就是json信息}",
+ "payload":"{value本身就是json信息}",
+ "timestamp",value的json中提取timestamp信息
+ }
  */
 public class JsonWrappedStringMessageDecoder extends MessageDecoder<Message, String> {
   private static final Logger log = Logger.getLogger(JsonWrappedStringMessageDecoder.class);
 
+  //设置时间字段属性 以及 时间格式
   // Property for format of timestamp in JSON timestamp field.
   public static final String CAMUS_MESSAGE_TIMESTAMP_FORMAT = "camus.message.timestamp.format";
   public static final String DEFAULT_TIMESTAMP_FORMAT = "[dd/MMM/yyyy:HH:mm:ss Z]";
@@ -121,18 +134,18 @@ public class JsonWrappedStringMessageDecoder extends MessageDecoder<Message, Str
       // If timestampFormat is 'unix_seconds',
       // then the timestamp only needs converted to milliseconds.
       // Also support 'unix' for backwards compatibility.
-      if (timestampFormat.equals("unix_seconds") || timestampFormat.equals("unix")) {
+      if (timestampFormat.equals("unix_seconds") || timestampFormat.equals("unix")) {//秒的时间戳
         timestamp = jsonObject.get(timestampField).getAsLong();
         // This timestamp is in seconds, convert it to milliseconds.
         timestamp = timestamp * 1000L;
       }
       // Else if this timestamp is already in milliseconds,
       // just save it as is.
-      else if (timestampFormat.equals("unix_milliseconds")) {
+      else if (timestampFormat.equals("unix_milliseconds")) {//毫秒时间戳
         timestamp = jsonObject.get(timestampField).getAsLong();
       }
       // Else if timestampFormat is 'ISO-8601', parse that
-      else if (timestampFormat.equals("ISO-8601")) {
+      else if (timestampFormat.equals("ISO-8601")) {//标准DateTime需要的时间戳
         String timestampString = jsonObject.get(timestampField).getAsString();
         try {
           timestamp = new DateTime(timestampString).getMillis();
@@ -142,7 +155,7 @@ public class JsonWrappedStringMessageDecoder extends MessageDecoder<Message, Str
       }
       // Otherwise parse the timestamp as a string in timestampFormat.
       else {
-        String timestampString = jsonObject.get(timestampField).getAsString();
+        String timestampString = jsonObject.get(timestampField).getAsString();//带有格式的时间日期字符串
         try {
           timestamp = dateTimeParser.parseDateTime(timestampString).getMillis();
         } catch (IllegalArgumentException e) {

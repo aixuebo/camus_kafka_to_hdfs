@@ -61,25 +61,37 @@ import org.apache.log4j.Logger;
  */
 public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
 
-  public static final String KAFKA_BLACKLIST_TOPIC = "kafka.blacklist.topics";
-  public static final String KAFKA_WHITELIST_TOPIC = "kafka.whitelist.topics";
+  //能处理的topic,一定是在白名单里，&& 不能在黑名单里  ，黑名单优先级更大，即黑名单出现的一定不会被处理该topic
+  public static final String KAFKA_BLACKLIST_TOPIC = "kafka.blacklist.topics";//黑名单,一定不会处理的topic
+  public static final String KAFKA_WHITELIST_TOPIC = "kafka.whitelist.topics";//白名单topic集合,可能会被处理的topic,是正则表达式，满足正则表达式的topic,则会保留继续解析该topic
 
-  public static final String KAFKA_MOVE_TO_LAST_OFFSET_LIST = "kafka.move.to.last.offset.list";
+  public static final String KAFKA_MOVE_TO_LAST_OFFSET_LIST = "kafka.move.to.last.offset.list";//强制移动到最新位置的offset的topic
   public static final String KAFKA_MOVE_TO_EARLIEST_OFFSET = "kafka.move.to.earliest.offset";
 
   public static final String KAFKA_CLIENT_BUFFER_SIZE = "kafka.client.buffer.size";
   public static final String KAFKA_CLIENT_SO_TIMEOUT = "kafka.client.so.timeout";
 
-  public static final String KAFKA_MAX_PULL_HRS = "kafka.max.pull.hrs";
+  /**
+   如果设置了参数 kafka.max.pull.hrs,则endTimeStamp会最终为第一次处理topic+partition时拿到的事件时间戳+kafka.max.pull.hrs对应的延迟时间。即更新endTimeStamp
+   如果没有设置参数 kafka.max.pull.hrs,则endTimeStamp为Long.MAX_VALUE最大值，等于失效。
+
+   读取topic+partition内容的事件时间戳跨度最大值，比如第一条读取的消息是11:01分,该值设置的是10分钟,则如果读取的信息中,事件时间戳超过了11:01分,则不需要再读取了。
+   如果不设置该参数(即该值为-1),则允许一直读下去,不关注事件的时间戳
+   */
+  public static final String KAFKA_MAX_PULL_HRS = "kafka.max.pull.hrs";//单位是小时
+
+  //每一个topic+partition最多允许处理多久,比如设置1分钟，如果读取一个topic+partition超过了1分钟，则不再读取该partition，切换到下一个partition处理，单位是分钟
   public static final String KAFKA_MAX_PULL_MINUTES_PER_TASK = "kafka.max.pull.minutes.per.task";
+
+  //当前系统时间戳 - 该值,如果kafka的事件时间戳<该结果,数据要被丢弃，说明是处理的老数据，不需要再处理了，单位是天
   public static final String KAFKA_MAX_HISTORICAL_DAYS = "kafka.max.historical.days";
 
-  public static final String CAMUS_MESSAGE_DECODER_CLASS = "camus.message.decoder.class";
+  public static final String CAMUS_MESSAGE_DECODER_CLASS = "camus.message.decoder.class";//不同的topic如何找到编码类
   public static final String ETL_IGNORE_SCHEMA_ERRORS = "etl.ignore.schema.errors";
   public static final String ETL_AUDIT_IGNORE_SERVICE_TOPIC_LIST = "etl.audit.ignore.service.topic.list";
 
-  public static final String CAMUS_WORK_ALLOCATOR_CLASS = "camus.work.allocator.class";
-  public static final String CAMUS_WORK_ALLOCATOR_DEFAULT = "com.linkedin.camus.workallocater.BaseAllocator";
+  public static final String CAMUS_WORK_ALLOCATOR_CLASS = "camus.work.allocator.class";//工作分配类
+  public static final String CAMUS_WORK_ALLOCATOR_DEFAULT = "com.linkedin.camus.workallocater.BaseAllocator";//默认类
 
   private static final int BACKOFF_UNIT_MILLISECONDS = 1000;
 
@@ -89,7 +101,7 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
 
   public static boolean reportJobFailureDueToOffsetOutOfRange = false;
   public static boolean reportJobFailureUnableToGetOffsetFromKafka = false;
-  public static boolean reportJobFailureDueToLeaderNotAvailable = false;
+  public static boolean reportJobFailureDueToLeaderNotAvailable = false;//true表示有异常,存在某一个topic的partition没有找到leader的情况
 
   private static Logger log = null;
 
@@ -115,6 +127,7 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
    * @param metaRequestTopics specify the list of topics to get topicMetadata. The empty list means
    * get the TopicsMetadata for all topics.
    * @return the list of TopicMetadata
+   * 向某一个broker节点发送topic元数据请求，获取元数据集合
    */
   public List<TopicMetadata> getKafkaMetadata(JobContext context, List<String> metaRequestTopics) {
     CamusJob.startTiming("kafkaSetupTime");
@@ -122,13 +135,15 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
     if (brokerString.isEmpty())
       throw new InvalidParameterException("kafka.brokers must contain at least one node");
     List<String> brokers = Arrays.asList(brokerString.split("\\s*,\\s*"));
-    Collections.shuffle(brokers);
+    Collections.shuffle(brokers);//打乱
     boolean fetchMetaDataSucceeded = false;
     int i = 0;
     List<TopicMetadata> topicMetadataList = null;
     Exception savedException = null;
-    while (i < brokers.size() && !fetchMetaDataSucceeded) {
+    while (i < brokers.size() && !fetchMetaDataSucceeded) {//依次向broker节点发送请求,有一个节点能处理请求都可以。主要是做HA高可用操作
       SimpleConsumer consumer = createBrokerConsumer(context, brokers.get(i));
+
+      //客户端xxx，请求broker节点，记录抓取元数据，抓取N个topic，topic都是什么
       log.info(String.format("Fetching metadata from broker %s with client id %s for %d topic(s) %s", brokers.get(i),
           consumer.clientId(), metaRequestTopics.size(), metaRequestTopics));
       try {
@@ -161,6 +176,7 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
     return topicMetadataList;
   }
 
+  //连接kafka
   private SimpleConsumer createBrokerConsumer(JobContext context, String broker) {
     if (!broker.matches(".+:\\d+"))
       throw new InvalidParameterException("The kakfa broker " + broker + " must follow address:port pattern");
@@ -181,22 +197,23 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
    * @param context
    * @param offsetRequestInfo
    * @return
+   * 返回所有要读取的topic+partition的信息
    */
   public ArrayList<CamusRequest> fetchLatestOffsetAndCreateEtlRequests(JobContext context,
       HashMap<LeaderInfo, ArrayList<TopicAndPartition>> offsetRequestInfo) {
     ArrayList<CamusRequest> finalRequests = new ArrayList<CamusRequest>();
     for (LeaderInfo leader : offsetRequestInfo.keySet()) {
       SimpleConsumer consumer = createSimpleConsumer(context, leader.getUri().getHost(), leader.getUri().getPort());
-      // Latest Offset
+      // Latest Offset 获取最新的offset
       PartitionOffsetRequestInfo partitionLatestOffsetRequestInfo =
           new PartitionOffsetRequestInfo(kafka.api.OffsetRequest.LatestTime(), 1);
-      // Earliest Offset
+      // Earliest Offset 获取最老的offset
       PartitionOffsetRequestInfo partitionEarliestOffsetRequestInfo =
           new PartitionOffsetRequestInfo(kafka.api.OffsetRequest.EarliestTime(), 1);
-      Map<TopicAndPartition, PartitionOffsetRequestInfo> latestOffsetInfo =
-          new HashMap<TopicAndPartition, PartitionOffsetRequestInfo>();
-      Map<TopicAndPartition, PartitionOffsetRequestInfo> earliestOffsetInfo =
-          new HashMap<TopicAndPartition, PartitionOffsetRequestInfo>();
+
+      //获取topic+partition的最老和最新的offset位置
+      Map<TopicAndPartition, PartitionOffsetRequestInfo> latestOffsetInfo = new HashMap<TopicAndPartition, PartitionOffsetRequestInfo>();
+      Map<TopicAndPartition, PartitionOffsetRequestInfo> earliestOffsetInfo = new HashMap<TopicAndPartition, PartitionOffsetRequestInfo>();
       ArrayList<TopicAndPartition> topicAndPartitions = offsetRequestInfo.get(leader);
       for (TopicAndPartition topicAndPartition : topicAndPartitions) {
         latestOffsetInfo.put(topicAndPartition, partitionLatestOffsetRequestInfo);
@@ -216,9 +233,10 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
       }
 
       for (TopicAndPartition topicAndPartition : topicAndPartitions) {
+
+        //获取topic+partition的最老和最新的offset位置
         long latestOffset = latestOffsetResponse.offsets(topicAndPartition.topic(), topicAndPartition.partition())[0];
-        long earliestOffset =
-            earliestOffsetResponse.offsets(topicAndPartition.topic(), topicAndPartition.partition())[0];
+        long earliestOffset = earliestOffsetResponse.offsets(topicAndPartition.topic(), topicAndPartition.partition())[0];
 
         //TODO: factor out kafka specific request functionality
         CamusRequest etlRequest =
@@ -232,6 +250,7 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
     return finalRequests;
   }
 
+  //获取topic+partition的offset
   protected OffsetResponse getLatestOffsetResponse(SimpleConsumer consumer,
       Map<TopicAndPartition, PartitionOffsetRequestInfo> offsetInfo, JobContext context) {
     for (int i = 0; i < NUM_TRIES_FETCH_FROM_LEADER; i++) {
@@ -281,6 +300,7 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
     return regex;
   }
 
+  //获取符合白名单条件的topic
   public List<TopicMetadata> filterWhitelistTopics(List<TopicMetadata> topicMetadataList,
       HashSet<String> whiteListTopics) {
     ArrayList<TopicMetadata> filteredTopics = new ArrayList<TopicMetadata>();
@@ -299,14 +319,17 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
   public List<InputSplit> getSplits(JobContext context) throws IOException, InterruptedException {
     CamusJob.startTiming("getSplits");
     ArrayList<CamusRequest> finalRequests;
-    HashMap<LeaderInfo, ArrayList<TopicAndPartition>> offsetRequestInfo =
-        new HashMap<LeaderInfo, ArrayList<TopicAndPartition>>();
+
+    //因为每一个topic+partition分布在不同的leader节点上,因此该信息是汇总每一个leader节点有哪些topic+partition数据
+    //key 是leader节点，value是该节点上的topic+partition集合
+    HashMap<LeaderInfo, ArrayList<TopicAndPartition>> offsetRequestInfo = new HashMap<LeaderInfo, ArrayList<TopicAndPartition>>();
+
     try {
 
-      // Get Metadata for all topics
+      // Get Metadata for all topics 获取所有topic的元数据信息 以及 每一个topic有多少个partition，一个每一个partition的leader节点是谁
       List<TopicMetadata> topicMetadataList = getKafkaMetadata(context, new ArrayList<String>());
 
-      // Filter any white list topics
+      // Filter any white list topics 获取符合白名单条件的topic
       HashSet<String> whiteListTopics = new HashSet<String>(Arrays.asList(getKafkaWhitelistTopic(context)));
       if (!whiteListTopics.isEmpty()) {
         topicMetadataList = filterWhitelistTopics(topicMetadataList, whiteListTopics);
@@ -320,7 +343,7 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
       }
 
       for (TopicMetadata topicMetadata : topicMetadataList) {
-        if (Pattern.matches(regex, topicMetadata.topic())) {
+        if (Pattern.matches(regex, topicMetadata.topic())) {//黑名单,一定不会处理的topic
           log.info("Discarding topic (blacklisted): " + topicMetadata.topic());
         } else if (!createMessageDecoder(context, topicMetadata.topic())) {
           log.info("Discarding topic (Decoder generation failed) : " + topicMetadata.topic());
@@ -328,9 +351,10 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
           log.info("Skipping the creation of ETL request for Whole Topic : " + topicMetadata.topic() + " Exception : "
               + ErrorMapping.exceptionFor(topicMetadata.errorCode()));
         } else {
-          for (PartitionMetadata partitionMetadata : topicMetadata.partitionsMetadata()) {
+          for (PartitionMetadata partitionMetadata : topicMetadata.partitionsMetadata()) {//循环每一个partition信息
             // We only care about LeaderNotAvailableCode error on partitionMetadata level
             // Error codes such as ReplicaNotAvailableCode should not stop us.
+            //因为partition的leader可能还尚未稳定，目标是要获取有leader的partition元数据信息,因此遇到尚未有leader的情况，需要不断请求topic元数据，直到拿到有leader的partition元数据信息
             partitionMetadata =
                 this.refreshPartitionMetadataOnLeaderNotAvailable(partitionMetadata, topicMetadata, context,
                     NUM_TRIES_PARTITION_METADATA);
@@ -368,8 +392,8 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
       throw new IOException("Unable to pull requests from Kafka brokers.", e);
     }
     // Get the latest offsets and generate the EtlRequests
+    // 返回所有要读取的topic+partition的信息,并且按照topic名字排序
     finalRequests = fetchLatestOffsetAndCreateEtlRequests(context, offsetRequestInfo);
-
     Collections.sort(finalRequests, new Comparator<CamusRequest>() {
       @Override
       public int compare(CamusRequest r1, CamusRequest r2) {
@@ -378,6 +402,7 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
     });
 
     writeRequests(finalRequests, context);
+    //从磁盘还原上一次每一个partition读取到offset的位置
     Map<CamusRequest, EtlKey> offsetKeys = getPreviousOffsets(FileInputFormat.getInputPaths(context), context);
     Set<String> moveLatest = getMoveToLatestTopicsSet(context);
     String camusRequestEmailMessage = "";
@@ -448,12 +473,12 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
     CamusJob.startTiming("hadoop");
     CamusJob.setTime("hadoop_start");
 
-    WorkAllocator allocator = getWorkAllocator(context);
+    WorkAllocator allocator = getWorkAllocator(context);//数据块分配对象
     Properties props = new Properties();
-    props.putAll(context.getConfiguration().getValByRegex(".*"));
-    allocator.init(props);
+    props.putAll(context.getConfiguration().getValByRegex(".*"));//配置信息中的key=value,如果key符合正则表达式,则将key=value提取出来
+    allocator.init(props);//初始化
 
-    return allocator.allocateWork(finalRequests, context);
+    return allocator.allocateWork(finalRequests, context);//分配若干个数据块
   }
 
   private Set<String> getMoveToLatestTopicsSet(JobContext context) {
@@ -518,6 +543,7 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
     writer.close();
   }
 
+  //从磁盘还原上一次每一个partition读取到offset的位置
   private Map<CamusRequest, EtlKey> getPreviousOffsets(Path[] inputs, JobContext context) throws IOException {
     Map<CamusRequest, EtlKey> offsetKeysMap = new HashMap<CamusRequest, EtlKey>();
     for (Path input : inputs) {
@@ -546,6 +572,7 @@ public class EtlInputFormat extends InputFormat<EtlKey, CamusWrapper> {
     return offsetKeysMap;
   }
 
+  //因为partition的leader可能还尚未稳定，目标是要获取有leader的partition元数据信息,因此遇到尚未有leader的情况，需要不断请求topic元数据，直到拿到有leader的partition元数据信息
   public PartitionMetadata refreshPartitionMetadataOnLeaderNotAvailable(PartitionMetadata partitionMetadata,
       TopicMetadata topicMetadata, JobContext context, int numTries) throws InterruptedException {
     int tryCounter = 0;

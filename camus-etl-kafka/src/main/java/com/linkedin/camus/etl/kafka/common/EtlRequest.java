@@ -30,6 +30,9 @@ import com.linkedin.camus.workallocater.CamusRequest;
  * used in reading and writing the sequence files used for the extraction job.
  * 
  * @author Richard Park
+ *
+ * //代表一个mapper要去抓取某一个topic+partition上的数据信息
+ * //包含topic名字、partition序号、partition的leader地址、leader的唯一ID、目前kafka上最早的offset和最晚的offset信息、从什么offset开始读取数据
  */
 public class EtlRequest implements CamusRequest {
 

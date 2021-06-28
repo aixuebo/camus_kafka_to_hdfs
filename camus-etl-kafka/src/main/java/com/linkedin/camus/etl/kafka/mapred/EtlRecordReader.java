@@ -29,7 +29,7 @@ import org.joda.time.format.PeriodFormatterBuilder;
 
 
 public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
-  private static final String PRINT_MAX_DECODER_EXCEPTIONS = "max.decoder.exceptions.to.print";
+  private static final String PRINT_MAX_DECODER_EXCEPTIONS = "max.decoder.exceptions.to.print";//最多允许解析message失败多少条
   private static final String DEFAULT_SERVER = "server";
   private static final String DEFAULT_SERVICE = "service";
   private static final int RECORDS_TO_READ_AFTER_TIMEOUT = 5;
@@ -46,10 +46,10 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
   private Mapper<EtlKey, Writable, EtlKey, Writable>.Context mapperContext;
   private KafkaReader reader;
 
-  private long totalBytes;
-  private long readBytes = 0;
-  private int numRecordsReadForCurrentPartition = 0;
-  private long bytesReadForCurrentPartition = 0;
+  private long totalBytes;//该split要处理的所有topic+partition信息，一共占多少个字节
+  private long readBytes = 0;//已经读了多少个字节
+  private int numRecordsReadForCurrentPartition = 0;//当前topic+partition读取了多少条数据
+  private long bytesReadForCurrentPartition = 0;//当前topic+partition读取了多少字节
 
   private boolean skipSchemaErrors = false;
   private MessageDecoder decoder;
@@ -58,11 +58,22 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
   private final EtlKey key = new EtlKey();
   private CamusWrapper value;
 
-  private int maxPullHours = 0;
-  private int exceptionCount = 0;
-  private long maxPullTime = 0;
+
+  private int exceptionCount = 0;//目前解析日志出错了多少条数据，当前面N条数据解析失败的时候，是允许打印日志的，把详细的解析失败日志打印出来 ---- 后面的数据依然继续解析，只是不再打印日志了
+
+
+    /**
+     如果设置了参数 kafka.max.pull.hrs,则endTimeStamp会最终为第一次处理topic+partition时拿到的事件时间戳+kafka.max.pull.hrs对应的延迟时间。即更新endTimeStamp
+     如果没有设置参数 kafka.max.pull.hrs,则endTimeStamp为Long.MAX_VALUE最大值，等于失效。
+
+     效果：如果当前处理的事件时间戳 > endTimeStamp,则不会继续在读取该topic+partition数据了。
+     */
   private long endTimeStamp = 0;
-  private long curTimeStamp = 0;
+  private int maxPullHours = 0;
+
+  private long maxPullTime = 0;//每一个topic+partition最多允许处理多久,比如设置1分钟，如果读取一个topic+partition超过了1分钟，则不再读取该partition，切换到下一个partition处理
+
+  private long curTimeStamp = 0;//当前处理的数据的事件时间戳
   private long startTime = 0;
   private HashSet<String> ignoreServerServiceList = null;
   private PeriodFormatter periodFormatter = null;
@@ -104,12 +115,18 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
 
     this.skipSchemaErrors = EtlInputFormat.getEtlIgnoreSchemaErrors(context);
 
+      /**
+       如果设置了参数 kafka.max.pull.hrs,则endTimeStamp会最终为第一次处理topic+partition时拿到的事件时间戳+kafka.max.pull.hrs对应的延迟时间。即更新endTimeStamp
+       如果没有设置参数 kafka.max.pull.hrs,则endTimeStamp为Long.MAX_VALUE最大值，等于失效。
+
+       */
     if (EtlInputFormat.getKafkaMaxPullHrs(context) != -1) {
       this.maxPullHours = EtlInputFormat.getKafkaMaxPullHrs(context);
     } else {
       this.endTimeStamp = Long.MAX_VALUE;
     }
 
+    //每一个topic+partition最多允许处理多久,比如设置1分钟，如果读取一个topic+partition超过了1分钟，则不再读取该partition，切换到下一个partition处理
     if (EtlInputFormat.getKafkaMaxPullMinutesPerTask(context) != -1) {
       this.startTime = System.currentTimeMillis();
       this.maxPullTime =
@@ -201,6 +218,7 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
   @Override
   public boolean nextKeyValue() throws IOException, InterruptedException {
 
+      //每一个topic+partition最多允许处理多久,比如设置1分钟，如果读取一个topic+partition超过了1分钟，则不再读取该partition，切换到下一个partition处理
     if (System.currentTimeMillis() > maxPullTime
         && this.numRecordsReadForCurrentPartition >= RECORDS_TO_READ_AFTER_TIMEOUT) {
       String maxMsg = "at " + new DateTime(curTimeStamp).toString();
@@ -230,8 +248,8 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
     while (true) {
       try {
 
-        if (reader == null || !reader.hasNext()) {
-          if (this.numRecordsReadForCurrentPartition != 0) {
+        if (reader == null || !reader.hasNext()) {//切换新的topic+partition
+          if (this.numRecordsReadForCurrentPartition != 0) { //打印日志,处理该topic+partition一共花费了多长时间、读取了多少条数据、杜少字节、平均每一条数据多少字节
             String timeSpentOnPartition =
                 this.periodFormatter.print(new Duration(this.startTime, System.currentTimeMillis()).toPeriod());
             log.info("Time spent on this partition = " + timeSpentOnPartition);
@@ -241,7 +259,7 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
                 / this.numRecordsReadForCurrentPartition);
           }
 
-          EtlRequest request = (EtlRequest) split.popRequest();
+          EtlRequest request = (EtlRequest) split.popRequest();//获取下一个要读取的topic+partition
           if (request == null) {
             return false;
           }
@@ -273,7 +291,10 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
 
           decoder = createDecoder(request.getTopic());
         }
+
+
         int count = 0;
+        //读取topic+partition的一条数据，注意读取解析后可能出现问题，因此有兼容处理，当出现问题的时候，也可以继续读取下一条数据，直到读取到好数据为止
         Message message;
         while ((message = reader.getNext(key)) != null) {
           readBytes += key.getMessageSize();
@@ -294,7 +315,8 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
             if (wrapper == null) {
               throw new RuntimeException("null record");
             }
-          } catch (Exception e) {
+          } catch (Exception e) {//读取的数据有问题，因此要继续读取下一行数据
+              //当前面N条数据解析失败的时候，是允许打印日志的，把详细的解析失败日志打印出来 ---- 后面的数据依然继续解析，只是不再打印日志了
             if (exceptionCount < getMaximumDecoderExceptionsToPrint(context)) {
               mapperContext.write(key, new ExceptionWritable(e));
               log.info(e.getMessage());
@@ -303,7 +325,7 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
               log.info("The same exception has occured for more than " + getMaximumDecoderExceptionsToPrint(context)
                   + " records. All further exceptions will not be printed");
             }
-            if (System.currentTimeMillis() > maxPullTime) {
+            if (System.currentTimeMillis() > maxPullTime) {//每一个topic+partition最多允许处理多久,比如设置1分钟，如果读取一个topic+partition超过了1分钟，则不再读取该partition，切换到下一个partition处理
               exceptionCount = 0;
               break;
             }
@@ -312,21 +334,22 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
 
           curTimeStamp = wrapper.getTimestamp();
           try {
+            //填充key关于该条记录的详细额外信息
             key.setTime(curTimeStamp);
             key.addAllPartitionMap(wrapper.getPartitionMap());
             setServerService();
-          } catch (Exception e) {
+          } catch (Exception e) {//读取的数据有问题，因此要继续读取下一行数据
             mapperContext.write(key, new ExceptionWritable(e));
             continue;
           }
 
-          if (endTimeStamp == 0) {
+          if (endTimeStamp == 0) {//第一次读取该topic+partiton信息，并且设置了参数kafka.max.pull.hrs
             DateTime time = new DateTime(curTimeStamp);
             statusMsg += " begin read at " + time.toString();
             context.setStatus(statusMsg);
             log.info(key.getTopic() + " begin read at " + time.toString());
-            endTimeStamp = (time.plusHours(this.maxPullHours)).getMillis();
-          } else if (curTimeStamp > endTimeStamp) {
+            endTimeStamp = (time.plusHours(this.maxPullHours)).getMillis();//更新最后时间戳
+          } else if (curTimeStamp > endTimeStamp) {//效果：如果当前处理的事件时间戳 > endTimeStamp,则不会继续在读取该topic+partition数据了。
             String maxMsg = "at " + new DateTime(curTimeStamp).toString();
             log.info("Kafka Max history hours reached");
             mapperContext.write(
@@ -342,8 +365,8 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
           }
 
           long secondTime = System.currentTimeMillis();
-          value = wrapper;
-          long decodeTime = ((secondTime - tempTime));
+          value = wrapper;//设置map要处理的value值
+          long decodeTime = ((secondTime - tempTime));//编码时间
 
           mapperContext.getCounter("total", "decode-time(ms)").increment(decodeTime);
 
@@ -355,7 +378,7 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
         log.info("Records read : " + count);
         count = 0;
         reader = null;
-      } catch (Throwable t) {
+      } catch (Throwable t) {//说明该reader解析都失败了,因此读取下一个reader,在读取下一个reader的时候，会有逻辑判断，当无reader的时候，直接返回false
         Exception e = new Exception(t.getLocalizedMessage(), t);
         e.setStackTrace(t.getStackTrace());
         mapperContext.write(key, new ExceptionWritable(e));
@@ -388,6 +411,7 @@ public class EtlRecordReader extends RecordReader<EtlKey, CamusWrapper> {
     }
   }
 
+  //最多允许解析message失败多少条  当前面N条数据解析失败的时候，是允许打印日志的，把详细的解析失败日志打印出来
   public static int getMaximumDecoderExceptionsToPrint(JobContext job) {
     return job.getConfiguration().getInt(PRINT_MAX_DECODER_EXCEPTIONS, 10);
   }

@@ -12,6 +12,7 @@ import java.util.Properties;
  * 
  * @param <S>
  *            A schema type.
+ * 为每一个topic注册一个schema，泛型S是具体的schema对象
  */
 public interface SchemaRegistry<S> {
     
@@ -35,6 +36,7 @@ public interface SchemaRegistry<S> {
 	 * @return A schema id. This id is implementation-specific. If the write
 	 *         fails, this method will throw an unchecked
 	 *         SchemaRegistryException.
+	 * 注册一个topic与schema映射
 	 */
 	public String register(String topic, S schema);
 
@@ -46,6 +48,7 @@ public interface SchemaRegistry<S> {
 	 * @param id
 	 * @return A schema. If not schema exists, an unchecked
 	 *         SchemaNotFoundException will be thrown.
+	 * 还原某一个版本的topic的schema信息
 	 */
 	public S getSchemaByID(String topic, String id);
 
@@ -57,6 +60,7 @@ public interface SchemaRegistry<S> {
 	 * @return A class that contains the topic name, schema id, and schema. If
 	 *         not schema exists, an unchecked SchemaNotFoundException will be
 	 *         thrown.
+	 * 获取最新的schema信息
 	 */
 	public SchemaDetails<S> getLatestSchemaByTopic(String topic);
 }

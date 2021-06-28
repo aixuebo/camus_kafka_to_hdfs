@@ -1,7 +1,7 @@
 package com.linkedin.camus.coders;
 
 import java.util.Properties;
-
+//如何将R转换成M
 public abstract class MessageEncoder<R, M> {
     protected Properties props;
     protected String topicName;

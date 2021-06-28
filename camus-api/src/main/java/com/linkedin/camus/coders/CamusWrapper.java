@@ -11,10 +11,12 @@ import org.apache.hadoop.io.Writable;
  * @author kgoodhop
  *
  * @param <R> The type of decoded payload
+ *
+ * hadoop的value
  */
 public class CamusWrapper<R> {
-    private R record;
-    private long timestamp;
+    private R record;//一条kafka的消息信息,比如JsonWrappedStringMessageDecoder对象
+    private long timestamp;//时间时间戳
     private MapWritable partitionMap;
 
     public CamusWrapper(R record) {

@@ -12,11 +12,11 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import com.linkedin.camus.etl.kafka.common.EtlRequest;
 import com.linkedin.camus.workallocater.CamusRequest;
 
-
+//一个mapper要读取的数据块，包含等待读取的多个topic+partition信息
 public class EtlSplit extends InputSplit implements Writable {
-  private List<CamusRequest> requests = new ArrayList<CamusRequest>();
-  private long length = 0;
-  private String currentTopic = "";
+  private List<CamusRequest> requests = new ArrayList<CamusRequest>();//等待读取的多个topic+partition信息
+  private long length = 0;//所有topic+partition的信息占用的总字节(预估值)
+  private String currentTopic = "";//当前在读取的topic信息
 
   @Override
   public void readFields(DataInput in) throws IOException {
@@ -41,6 +41,7 @@ public class EtlSplit extends InputSplit implements Writable {
     return length;
   }
 
+  //要读取多少个topic+partition信息
   public int getNumRequests() {
     return requests.size();
   }
@@ -55,6 +56,7 @@ public class EtlSplit extends InputSplit implements Writable {
     length += request.estimateDataSize();
   }
 
+  //弹出下一个要读取的topic+partition
   public CamusRequest popRequest() {
     if (requests.size() > 0) {
       for (int i = 0; i < requests.size(); i++) {

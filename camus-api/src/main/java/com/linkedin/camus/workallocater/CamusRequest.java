@@ -4,7 +4,8 @@ import java.net.URI;
 
 import org.apache.hadoop.io.Writable;
 
-
+//代表一个mapper要去抓取某一个topic+partition上的数据信息
+//包含topic名字、partition序号、partition的leader地址、leader的唯一ID、目前kafka上最早的offset和最晚的offset信息、从什么offset开始读取数据
 public interface CamusRequest extends Writable {
 
   public abstract void setLatestOffset(long latestOffset);
@@ -22,6 +23,7 @@ public interface CamusRequest extends Writable {
    * Sets the broker uri for this request
    * 
    * @param uri
+   * partition的leader节点地址
    */
   public abstract void setURI(URI uri);
 
@@ -29,6 +31,7 @@ public interface CamusRequest extends Writable {
    * Retrieve the topic
    * 
    * @return
+   * topic名字
    */
   public abstract String getTopic();
 

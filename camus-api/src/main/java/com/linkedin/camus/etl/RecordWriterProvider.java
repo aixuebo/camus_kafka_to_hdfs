@@ -14,6 +14,7 @@ public interface RecordWriterProvider {
 
     String getFilenameExtension();
 
+    //产生一个输出流，可以向该输出流中写入数据
     RecordWriter<IEtlKey, CamusWrapper> getDataRecordWriter(
             TaskAttemptContext context, String fileName, CamusWrapper data, FileOutputCommitter committer) throws IOException,
             InterruptedException;

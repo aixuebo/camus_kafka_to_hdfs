@@ -10,6 +10,8 @@ import java.util.Properties;
  *
  * @param <M> The message type to be decoded
  * @param <R> The type of the decoded message
+ *
+ * 如何对某个固定的topic的数据进行解析  将M类型 转换成R类型
  */
 public abstract class MessageDecoder<M,R> {
 	protected Properties props;

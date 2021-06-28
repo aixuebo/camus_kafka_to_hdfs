@@ -33,14 +33,17 @@ import org.apache.log4j.Logger;
  * - mapreduce.output.fileoutputformat.compress.codec   - org.apache.hadoop.io.compress.* (SnappyCodec, etc.)
  * - mapreduce.output.fileoutputformat.compress.type    - BLOCK or RECORD
  *
+ * 进入该类的kafka的value一定也是String类型的json信息。
+ * 最终每一条数据存储的格式为:writer.append(new LongWritable(key.getTime()), new Text(record));
+ * 即事件时间戳 以及 事件内容
  */
 public class SequenceFileRecordWriterProvider implements RecordWriterProvider {
-  public static final String ETL_OUTPUT_RECORD_DELIMITER = "etl.output.record.delimiter";
-  public static final String DEFAULT_RECORD_DELIMITER = "";
 
   private static Logger log = Logger.getLogger(SequenceFileRecordWriterProvider.class);
 
-  protected String recordDelimiter = null;
+  public static final String ETL_OUTPUT_RECORD_DELIMITER = "etl.output.record.delimiter";
+  public static final String DEFAULT_RECORD_DELIMITER = "";
+  protected String recordDelimiter = null; //行之间的分割方式，该类处理的不是字符串类型,因此有特殊的分割方式，不需要单独定义分割方式
 
   public SequenceFileRecordWriterProvider(TaskAttemptContext context) {
 
@@ -61,6 +64,7 @@ public class SequenceFileRecordWriterProvider implements RecordWriterProvider {
     Configuration conf = context.getConfiguration();
 
     // If recordDelimiter hasn't been initialized, do so now
+    // 行之间的分割方式，该类处理的不是字符串类型,因此有特殊的分割方式，不需要单独定义分割方式
     if (recordDelimiter == null) {
       recordDelimiter = conf.get(ETL_OUTPUT_RECORD_DELIMITER, DEFAULT_RECORD_DELIMITER);
     }

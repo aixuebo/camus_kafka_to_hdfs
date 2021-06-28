@@ -7,10 +7,12 @@ import java.io.IOException;
 
 /**
  * Created by michaelandrepearce on 05/04/15.
+ *
+ * 保存接受到的一个信息内容:topic、partition、offset、key、value、checksum
  */
 public class KafkaMessage implements com.linkedin.camus.coders.Message {
 
-    byte[] payload;
+    byte[] payload;//value
     byte[] key;
 
     private String topic = "";

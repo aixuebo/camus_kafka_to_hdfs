@@ -16,6 +16,11 @@ import java.util.Properties;
  * 
  * @param <S>
  *            The type of the schema that this registry manages.
+ * 每一个topic的schema信息序列化后，输出到文件中,因为可能topic有多个版本的schema,因此格式如下:
+ * 文件路径:
+ * /root/topic/md5(byte(schema)).schema
+ * /root/topic/md5(byte(schema)).schema.latest 最新版
+ * 文件内容就是schema的字节数组
  */
 public class FileSchemaRegistry<S> implements SchemaRegistry<S> {
   private final File root;
@@ -29,6 +34,7 @@ public class FileSchemaRegistry<S> implements SchemaRegistry<S> {
     this.serde = serde;
   }
 
+  //注册一个topic与schema映射,生成一个文件，存储schema信息
   @Override
   public String register(String topic, S schema) {
     FileOutputStream out = null;

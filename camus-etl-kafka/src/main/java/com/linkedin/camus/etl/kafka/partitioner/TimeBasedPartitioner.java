@@ -22,21 +22,27 @@ import static com.linkedin.camus.etl.kafka.mapred.EtlMultiOutputFormat.*;
  *       defaults to {@code en_US}.
  *     <li>{@code etl.default.timezone} - timezone of the events, defaults to {@code America/Los_Angeles}</li>
  * </ul>
+ * 分钟级别的分区，需要设置分区的目录名字，以及分钟间隔
  */
 public class TimeBasedPartitioner extends BaseTimeBasedPartitioner {
 
+  //默认是60分钟一个间隔，因此相当于一小时，因此默认是以下2个配置，如果不是60分钟，则需要重新定义这两个配置
   private static final String DEFAULT_TOPIC_SUB_DIR_FORMAT = "'hourly'/YYYY/MM/dd/HH";
   private static final String DEFAULT_PARTITION_DURATION_MINUTES = "60";
+
   private static final String DEFAULT_LOCALE = Locale.US.toString();
 
   @Override
   public void setConf(Configuration conf) {
     if (conf != null) {
+
       String destPathTopicSubDirFormat = conf.get(ETL_DESTINATION_PATH_TOPIC_SUBDIRFORMAT, DEFAULT_TOPIC_SUB_DIR_FORMAT);
       long partitionDurationMinutes = Long.parseLong(conf.get(ETL_OUTPUT_FILE_TIME_PARTITION_MINS, DEFAULT_PARTITION_DURATION_MINUTES));
+
       Locale locale = LocaleUtils.toLocale(conf.get(ETL_DESTINATION_PATH_TOPIC_SUBDIRFORMAT_LOCALE, DEFAULT_LOCALE));
       DateTimeZone outputTimeZone = DateTimeZone.forID(conf.get(ETL_DEFAULT_TIMEZONE, DEFAULT_TIME_ZONE));
-      long outfilePartitionMs = TimeUnit.MINUTES.toMillis(partitionDurationMinutes);
+
+      long outfilePartitionMs = TimeUnit.MINUTES.toMillis(partitionDurationMinutes);//根据分钟级别间隔，设置分区时间间隔
 
       init(outfilePartitionMs, destPathTopicSubDirFormat, locale, outputTimeZone);
     }

@@ -28,12 +28,14 @@ public class EtlMultiOutputRecordWriter extends RecordWriter<EtlKey, Object> {
   private TaskAttemptContext context;
   private Writer errorWriter = null;
   private String currentTopic = "";
-  private long beginTimeStamp = 0;
+  private long beginTimeStamp = 0;//当前系统时间戳 - 该值,如果kafka的事件时间戳<该结果,数据要被丢弃，说明是处理的老数据，不需要再处理了
   private static Logger log = Logger.getLogger(EtlMultiOutputRecordWriter.class);
   private final Counter topicSkipOldCounter;
 
-  private HashMap<String, RecordWriter<IEtlKey, CamusWrapper>> dataWriters =
-      new HashMap<String, RecordWriter<IEtlKey, CamusWrapper>>();
+  //每一个数据写入的分区是不同的，因此缓存每一个文件对应一个输出流
+  //key是文件名、value是对应的输出流
+  private HashMap<String, RecordWriter<IEtlKey, CamusWrapper>> dataWriters = new HashMap<String, RecordWriter<IEtlKey, CamusWrapper>>();
+
 
   private EtlMultiOutputCommitter committer;
 
@@ -88,10 +90,14 @@ public class EtlMultiOutputRecordWriter extends RecordWriter<EtlKey, Object> {
     errorWriter.close();
   }
 
+  /**
+   1.每次在输出一个数据时,相当于该数据已经被消费了，因此要提交offset。
+   2.每一个数据写入的分区是不同的，因此缓存每一个文件对应一个输出流
+   **/
   @Override
   public void write(EtlKey key, Object val) throws IOException, InterruptedException {
     if (val instanceof CamusWrapper<?>) {
-      if (key.getTime() < beginTimeStamp) {
+      if (key.getTime() < beginTimeStamp) {//说明数据内容是好几天前的了，要抛弃掉
         //TODO: fix this logging message, should be logged once as a total count of old records skipped for each topic
         // for now, commenting this out
         //log.warn("Key's time: " + key + " is less than beginTime: " + beginTimeStamp);

@@ -27,6 +27,6 @@ public class EtlMapper extends Mapper<EtlKey, CamusWrapper, EtlKey, CamusWrapper
 
     long endTime = System.currentTimeMillis();
     long mapTime = ((endTime - startTime));
-    context.getCounter("total", "mapper-time(ms)").increment(mapTime);
+    context.getCounter("total", "mapper-time(ms)").increment(mapTime);//记录map处理所有数据的总时间
   }
 }

@@ -18,7 +18,8 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 /**
  *
- *
+ * value一定是带有schema信息的avro对象
+ * 现在文件中输出schema，然后不断地写入数据，类似excel，因此会节省很多内存空间
  */
 public class AvroRecordWriterProvider implements RecordWriterProvider {
   public final static String EXT = ".avro";
@@ -47,15 +48,13 @@ public class AvroRecordWriterProvider implements RecordWriterProvider {
 
     Path path = committer.getWorkPath();
     path = new Path(path, EtlMultiOutputFormat.getUniqueFile(context, fileName, EXT));
-    writer.create(((GenericRecord) data.getRecord()).getSchema(), path.getFileSystem(context.getConfiguration())
-        .create(path));
-
+    writer.create(((GenericRecord) data.getRecord()).getSchema(), path.getFileSystem(context.getConfiguration()).create(path));//先在文件中 输出schema
     writer.setSyncInterval(EtlMultiOutputFormat.getEtlAvroWriterSyncInterval(context));
 
     return new RecordWriter<IEtlKey, CamusWrapper>() {
       @Override
       public void write(IEtlKey ignore, CamusWrapper data) throws IOException {
-        writer.append(data.getRecord());
+        writer.append(data.getRecord());//直接存储对象本身
       }
 
       @Override

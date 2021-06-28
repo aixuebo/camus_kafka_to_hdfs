@@ -19,7 +19,8 @@ import static com.linkedin.camus.etl.kafka.mapred.EtlMultiOutputFormat.ETL_DESTI
  *     <li>{@code etl.destination.path.topic.sub.dir} - sub-dir to create under topic dir, defaults to {@code daily}</li>
  *     <li>{@code etl.default.timezone} - timezone of the events, defaults to {@code America/Los_Angeles}</li>
  * </ul>
- */
+ * 输出 /path/topic/${自定义名字}/YYYY/MM/DD等格式
+ * */
 public class DailyPartitioner extends BaseTimeBasedPartitioner {
 
   private static final String DEFAULT_TOPIC_SUB_DIR = "daily";
@@ -30,7 +31,7 @@ public class DailyPartitioner extends BaseTimeBasedPartitioner {
       String destPathTopicSubDir = conf.get(ETL_DESTINATION_PATH_TOPIC_SUBDIRECTORY, DEFAULT_TOPIC_SUB_DIR);
       DateTimeZone outputTimeZone = DateTimeZone.forID(conf.get(ETL_DEFAULT_TIMEZONE, DEFAULT_TIME_ZONE));
 
-      long outfilePartitionMs = TimeUnit.HOURS.toMillis(24);
+      long outfilePartitionMs = TimeUnit.HOURS.toMillis(24);//24小时有多少毫秒  86400000
       String destSubTopicPathFormat = "'" + destPathTopicSubDir + "'/YYYY/MM/dd";
       init(outfilePartitionMs, destSubTopicPathFormat, Locale.US, outputTimeZone);
     }
